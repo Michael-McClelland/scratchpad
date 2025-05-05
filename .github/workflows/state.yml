@@ -1,0 +1,276 @@
+name: 'state'
+
+on:
+  workflow_dispatch:
+
+env:
+  ACCOUNT_ID: "398930073421"
+  NAME_IDENTIFIER: "vpcdemo"
+  WORKING_DIRECTORY: ./state/
+  WORKING_DIRECTORY_ADDITIONAL_REGIONS: ./state/additional-regions/
+  region: "us-east-2"
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  deploy_home_region:
+    name: 'deploy_home_region'
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        shell: bash
+
+    permissions:
+      contents: read
+      id-token: write
+
+    outputs:
+      BUCKET_EXISTS: ${{steps.s3bucket.outputs.BUCKET_EXISTS}}
+      KMS_KEY_EXISTS: ${{steps.kmskey.outputs.KMS_KEY_EXISTS}}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: latest
+
+      - name: Authenticate with AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{env.ACCOUNT_ID}}:role/goldrock-github-actions
+          aws-region: ${{env.region}}
+          mask-aws-account-id: false
+
+      - name: s3bucket
+        working-directory: ${{env.WORKING_DIRECTORY}}
+        run: |
+          if [ ! -z "$( aws s3api head-bucket --bucket ${{env.NAME_IDENTIFIER}}-tfstate-${{env.ACCOUNT_ID}}-${{env.region}} 2>/dev/null)" ];
+          then
+            echo BUCKET_EXISTS=true >> "$GITHUB_ENV"
+          else
+            echo BUCKET_EXISTS=false >> "$GITHUB_ENV"
+          fi
+
+      - name: kmskey
+        working-directory: ${{env.WORKING_DIRECTORY}}
+        run: |
+          if [ ! -z "$(aws kms describe-key --key-id arn:aws:kms:${{env.region}}:${{env.ACCOUNT_ID}}:alias/${{env.NAME_IDENTIFIER}}-tfstate 2>/dev/null)" ];
+          then 
+            KMS_KEY_EXISTS_CHECK=$(aws kms describe-key --key-id arn:aws:kms:${{env.region}}:${{env.ACCOUNT_ID}}:alias/${{env.NAME_IDENTIFIER}}-tfstate 2>/dev/null)
+            KMS_KEY_ACCOUNT=$(echo $KMS_KEY_EXISTS_CHECK | jq -r '.KeyMetadata.AWSAccountId' 2>/dev/null)
+            echo KMS_KEY_EXISTS=true >> "$GITHUB_ENV"
+          else
+            echo KMS_KEY_EXISTS=false >> "$GITHUB_ENV"
+          fi
+
+      - name: create bucket
+        if: ${{ env.BUCKET_EXISTS == 'false' }}
+        working-directory: ${{env.WORKING_DIRECTORY}}
+        run: |
+          if [ ${{env.region}} = "us-east-1" ];
+          then
+            aws s3api create-bucket --bucket ${{env.NAME_IDENTIFIER}}-tfstate-${{env.ACCOUNT_ID}}-us-east-1
+          else
+            aws s3api create-bucket --bucket ${{env.NAME_IDENTIFIER}}-tfstate-${{env.ACCOUNT_ID}}-${{env.region}} --region ${{env.region}} --create-bucket-configuration LocationConstraint=${{env.region}}
+          fi
+          sleep 60
+
+      - name: create key
+        if: ${{ env.KMS_KEY_EXISTS == 'false' }}
+        working-directory: ${{env.WORKING_DIRECTORY}}
+        run: |
+          KEY_ID=$(aws kms create-key --multi-region | jq -r '.KeyMetadata.KeyId')
+          aws kms create-alias --alias-name alias/${{env.NAME_IDENTIFIER}}-tfstate --target-key-id $KEY_ID
+          sleep 60
+
+      - name: Terraform init
+        working-directory: ${{env.WORKING_DIRECTORY}}
+        env:
+          TF_VAR_name: ${{env.NAME_IDENTIFIER}}-tfstate
+        run: |
+          terraform init \
+            -backend-config="bucket=${{env.NAME_IDENTIFIER}}-tfstate-${{env.ACCOUNT_ID}}-${{env.region}}" \
+            -backend-config="use_lockfile=true" \
+            -backend-config="kms_key_id=arn:aws:kms:${{env.region}}:${{env.ACCOUNT_ID}}:alias/${{env.NAME_IDENTIFIER}}-tfstate" \
+            -backend-config="key=${{env.ACCOUNT_ID}}/${{env.region}}/state" \
+            -backend-config="region=${{env.region}}" \
+            -backend-config="encrypt=true" \
+            -backend-config="max_retries=20"
+
+      - name: Terraform import bucket
+        if: ${{ env.BUCKET_EXISTS == 'false' }}
+        working-directory: ${{env.WORKING_DIRECTORY}}
+        env:
+          TF_VAR_name: ${{env.NAME_IDENTIFIER}}-tfstate
+        run: |
+          terraform import aws_s3_bucket.bucket ${{env.NAME_IDENTIFIER}}-tfstate-${{env.ACCOUNT_ID}}-${{env.region}}
+
+      - name: Terraform import kms key
+        if: ${{ env.KMS_KEY_EXISTS == 'false' }}
+        working-directory: ${{env.WORKING_DIRECTORY}}
+        env:
+          TF_VAR_name: ${{env.NAME_IDENTIFIER}}-tfstate
+        run: |
+          terraform import aws_kms_alias.alias alias/${{env.NAME_IDENTIFIER}}-tfstate
+          terraform import aws_kms_key.key $(aws kms describe-key --key-id arn:aws:kms:${{env.region}}:${{env.ACCOUNT_ID}}:alias/${{env.NAME_IDENTIFIER}}-tfstate | jq -r '.KeyMetadata.KeyId')
+      
+      - name: Terraform plan
+        working-directory: ${{env.WORKING_DIRECTORY}}
+        run: terraform plan -out plan
+        env:
+          TF_VAR_management_account_id: ${{env.ACCOUNT_ID}}
+          TF_VAR_account_id: ${{env.ACCOUNT_ID}}
+          TF_VAR_region: ${{env.region}}
+          TF_VAR_ref: ${{github.ref_name}}
+          TF_VAR_NAME_IDENTIFIER: ${{env.NAME_IDENTIFIER}}
+          TF_VAR_name: ${{env.NAME_IDENTIFIER}}
+
+      - name: Terraform apply
+        if: github.ref == 'refs/heads/main'
+        working-directory: ${{env.WORKING_DIRECTORY}}
+        run: terraform apply plan
+
+  parse_additional_regions:
+    if: ${{  vars.ADDITIONAL_REGIONS != '' }}
+    name: 'parse_additional_regions'
+    runs-on: ubuntu-latest
+    needs: deploy_home_region
+    defaults:
+      run:
+        shell: bash
+
+    permissions:
+      contents: read
+      id-token: write
+
+    outputs:
+      regions: ${{steps.list_regions.outputs.regions}}
+    steps:
+      - name: list regions
+        id: list_regions
+        run: |
+          echo "regions="$(echo "${{ vars.ADDITIONAL_REGIONS }}" | jq -cR 'split(" ")') >> "$GITHUB_OUTPUT"
+          echo "${{ vars.ADDITIONAL_REGIONS }}" | jq -cR 'split(" ")' 
+
+  additional_regions:
+    if: ${{  vars.ADDITIONAL_REGIONS != '' }}
+    name: 'additional_regions'
+    runs-on: ubuntu-latest
+    needs: parse_additional_regions
+    defaults:
+      run:
+        shell: bash
+
+    permissions:
+      contents: read
+      id-token: write
+
+    strategy:
+      max-parallel: 10
+      fail-fast: false
+      matrix:
+        account_id:
+          - ${{ vars.MANAGEMENT_ACCOUNT_ID }}
+        region: ${{fromJson(needs.parse_additional_regions.outputs.regions)}}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: latest
+
+      - name: Authenticate with AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{env.ACCOUNT_ID}}:role/goldrock-github-actions
+          aws-region: ${{ matrix.region }}
+          mask-aws-account-id: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          whoami
+          python -m pip install --upgrade boto3
+
+      - name: Setup State
+        working-directory: "./python/"
+        env:
+          PY_HOME_REGION: ${{env.region}}
+          PY_REGION: ${{matrix.region}}
+        run: |
+          python additional_regions_state.py
+
+      - name: Terraform init
+        working-directory: ${{env.WORKING_DIRECTORY_ADDITIONAL_REGIONS}}
+        env:
+          TF_VAR_name: ${{env.NAME_IDENTIFIER}}
+          TF_VAR_HOME_REGION: ${{env.region}}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{env.NAME_IDENTIFIER}}-tfstate-${{env.ACCOUNT_ID}}-${{matrix.region}}" \
+            -backend-config="use_lockfile=true" \
+            -backend-config="kms_key_id=arn:aws:kms:${{matrix.region}}:${{env.ACCOUNT_ID}}:alias/${{env.NAME_IDENTIFIER}}-tfstate" \
+            -backend-config="key=${{env.ACCOUNT_ID}}/${{matrix.region}}/state" \
+            -backend-config="region=${{matrix.region}}" \
+            -backend-config="encrypt=true" \
+            -backend-config="max_retries=20"
+
+      - name: Terraform Import
+        working-directory: ${{env.WORKING_DIRECTORY_ADDITIONAL_REGIONS}}
+        env:
+          TF_VAR_name: ${{env.NAME_IDENTIFIER}}
+          TF_VAR_HOME_REGION: ${{env.region}}
+        run: |
+          if [[ $(terraform state list | grep 'aws_s3_bucket.bucket' 2>/dev/null) ]]; then
+            echo "bucket already in state"
+          else
+            terraform import aws_s3_bucket.bucket ${{env.NAME_IDENTIFIER}}-tfstate-${{env.ACCOUNT_ID}}-${{matrix.region}}
+          fi
+          if [[ $(terraform state list | grep 'aws_kms_replica_key.replica' 2>/dev/null) ]]; then
+            echo "key already in state"
+          else
+            terraform import aws_kms_replica_key.replica $(aws kms describe-key --key-id arn:aws:kms:${{matrix.region}}:${{env.ACCOUNT_ID}}:alias/${{env.NAME_IDENTIFIER}}-tfstate | jq -r '.KeyMetadata.KeyId')
+          fi
+          if [[ $(terraform state list | grep 'aws_kms_alias.alias' 2>/dev/null) ]]; then
+            echo "alias already in state"
+          else
+            terraform import aws_kms_alias.alias alias/${{env.NAME_IDENTIFIER}}-tfstate
+          fi
+
+      - name: Terraform plan
+        working-directory: ${{env.WORKING_DIRECTORY_ADDITIONAL_REGIONS}}
+        run: terraform plan -out plan
+        env:
+          TF_VAR_management_account_id: ${{env.ACCOUNT_ID}}
+          TF_VAR_account_id: ${{env.ACCOUNT_ID}}
+          TF_VAR_region: ${{matrix.region}}
+          TF_VAR_ref: ${{github.ref_name}}
+          TF_VAR_NAME_IDENTIFIER: ${{env.NAME_IDENTIFIER}}
+          TF_VAR_name: ${{env.NAME_IDENTIFIER}}
+          TF_VAR_HOME_REGION: ${{env.region}}
+
+      - name: Terraform apply
+        if: github.ref == 'refs/heads/main'
+        working-directory: ${{env.WORKING_DIRECTORY_ADDITIONAL_REGIONS}}
+        run: terraform apply plan
+        env:
+          TF_VAR_management_account_id: ${{env.ACCOUNT_ID}}
+          TF_VAR_account_id: ${{env.ACCOUNT_ID}}
+          TF_VAR_region: ${{matrix.region}}
+          TF_VAR_ref: ${{github.ref_name}}
+          TF_VAR_NAME_IDENTIFIER: ${{env.NAME_IDENTIFIER}}
+          TF_VAR_name: ${{env.NAME_IDENTIFIER}}
+          TF_VAR_HOME_REGION: ${{env.region}}
