@@ -5,10 +5,12 @@ on:
 
 env:
   ACCOUNT_ID: "398930073421"
+  ADDITIONAL_REGIONS: ""
   NAME_IDENTIFIER: "vpcdemo"
-  WORKING_DIRECTORY: ./state/
-  WORKING_DIRECTORY_ADDITIONAL_REGIONS: ./state/additional-regions/
+  OIDC_ROLE_NAME: "oidc-example-state"
   region: "us-east-2"
+  WORKING_DIRECTORY_ADDITIONAL_REGIONS: ./state/additional-regions/
+  WORKING_DIRECTORY: ./state/
 
 concurrency:
   group: ${{ github.workflow }}
@@ -43,7 +45,8 @@ jobs:
       - name: Authenticate with AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{env.ACCOUNT_ID}}:role/oidc-example-write
+          role-to-assume: arn:aws:iam::${{env.ACCOUNT_ID}}:role/${{env.OIDC_ROLE_NAME}}
+          role-session-name: github-actions-state
           aws-region: ${{env.region}}
           mask-aws-account-id: false
 
