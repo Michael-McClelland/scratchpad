@@ -31,5 +31,5 @@ variable "github_organization" {
 variable "github_repo" {
   description = "GitHub repository name"
   type        = string
-  default     = "vpcdemo"
+  default     = "scratchpad"
 }
