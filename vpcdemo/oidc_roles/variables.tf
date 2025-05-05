@@ -10,6 +10,12 @@ variable "write_role_name" {
   default     = "oidc-example-write"
 }
 
+variable "state_role_name" {
+  description = "Name of the write access IAM role for GitHub OIDC"
+  type        = string
+  default     = "oidc-example-state"
+}
+
 variable "max_session_duration" {
   description = "Maximum session duration for IAM roles in seconds"
   type        = number
