@@ -43,7 +43,7 @@ jobs:
       - name: Authenticate with AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{env.ACCOUNT_ID}}:role/goldrock-github-actions
+          role-to-assume: arn:aws:iam::${{env.ACCOUNT_ID}}:role/oidc-example-write
           aws-region: ${{env.region}}
           mask-aws-account-id: false
 
@@ -176,7 +176,7 @@ jobs:
       fail-fast: false
       matrix:
         account_id:
-          - ${{ vars.MANAGEMENT_ACCOUNT_ID }}
+          - ${{ vars.ACCOUNT_ID }}
         region: ${{fromJson(needs.parse_additional_regions.outputs.regions)}}
 
     steps:
