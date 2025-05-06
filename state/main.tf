@@ -326,13 +326,13 @@ data "aws_iam_policy_document" "keypolicy" {
     resources = [
       "*",
     ]
-    # condition {
-    #   test     = "StringEquals"
-    #   variable = "kms:ViaService"
-    #   values = [
-    #     "s3.${data.aws_region.current.id}.amazonaws.com"
-    #   ]
-    # }
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values = [
+        "s3.${data.aws_region.current.id}.amazonaws.com"
+      ]
+    }
     # condition {
     #   test     = "StringEquals"
     #   variable = "kms:EncryptionContext:aws:s3:arn"
