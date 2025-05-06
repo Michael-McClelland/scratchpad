@@ -61,50 +61,50 @@ data "aws_iam_policy_document" "bucket" {
     }
   }
 
-  statement {
-    effect = "Deny"
-    principals {
-      type        = "AWS"
-      identifiers = ["*"]
-    }
-    actions = [
-      "s3:PutObject",
-    ]
+  # statement {
+  #   effect = "Deny"
+  #   principals {
+  #     type        = "AWS"
+  #     identifiers = ["*"]
+  #   }
+  #   actions = [
+  #     "s3:PutObject",
+  #   ]
 
-    resources = [
-      "${aws_s3_bucket.bucket.arn}/*"
-    ]
-    condition {
-      test     = "StringNotEqualsIfExists"
-      variable = "s3:x-amz-server-side-encryption"
-      values   = ["aws:kms"]
-    }
-    condition {
-      test     = "Null"
-      variable = "s3:x-amz-server-side-encryption"
-      values   = ["false"]
-    }
-  }
+  #   resources = [
+  #     "${aws_s3_bucket.bucket.arn}/*"
+  #   ]
+  #   condition {
+  #     test     = "StringNotEqualsIfExists"
+  #     variable = "s3:x-amz-server-side-encryption"
+  #     values   = ["aws:kms"]
+  #   }
+  #   condition {
+  #     test     = "Null"
+  #     variable = "s3:x-amz-server-side-encryption"
+  #     values   = ["false"]
+  #   }
+  # }
 
-  statement {
-    effect = "Deny"
-    principals {
-      type        = "AWS"
-      identifiers = ["*"]
-    }
-    actions = [
-      "s3:PutObject",
-    ]
+  # statement {
+  #   effect = "Deny"
+  #   principals {
+  #     type        = "AWS"
+  #     identifiers = ["*"]
+  #   }
+  #   actions = [
+  #     "s3:PutObject",
+  #   ]
 
-    resources = [
-      "${aws_s3_bucket.bucket.arn}/*"
-    ]
-    condition {
-      test     = "StringNotEquals"
-      variable = "s3:x-amz-server-side-encryption-aws-kms-key-id"
-      values   = [aws_kms_key.key.arn]
-    }
-  }
+  #   resources = [
+  #     "${aws_s3_bucket.bucket.arn}/*"
+  #   ]
+  #   condition {
+  #     test     = "StringNotEquals"
+  #     variable = "s3:x-amz-server-side-encryption-aws-kms-key-id"
+  #     values   = [aws_kms_key.key.arn]
+  #   }
+  # }
 
   statement {
     effect = "Deny"
@@ -326,20 +326,20 @@ data "aws_iam_policy_document" "keypolicy" {
     resources = [
       "*",
     ]
-    condition {
-      test     = "StringEquals"
-      variable = "kms:ViaService"
-      values = [
-        "s3.${data.aws_region.current.id}.amazonaws.com"
-      ]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "kms:EncryptionContext:aws:s3:arn"
-      values = [
-        aws_s3_bucket.bucket.arn
-      ]
-    }
+    # condition {
+    #   test     = "StringEquals"
+    #   variable = "kms:ViaService"
+    #   values = [
+    #     "s3.${data.aws_region.current.id}.amazonaws.com"
+    #   ]
+    # }
+    # condition {
+    #   test     = "StringEquals"
+    #   variable = "kms:EncryptionContext:aws:s3:arn"
+    #   values = [
+    #     aws_s3_bucket.bucket.arn
+    #   ]
+    # }
     condition {
       test     = "StringEquals"
       variable = "aws:PrincipalOrgID"

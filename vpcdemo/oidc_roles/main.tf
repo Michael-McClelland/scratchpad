@@ -99,17 +99,35 @@ resource "aws_iam_policy" "state_policy" {
         Effect = "Allow"
         Action = [
           "kms:*",
-          "s3:*"
+          "s3:*",
+          "organizations:Describe*",
         ]
         Resource = "*"
       }
     ]
   })
 }
-resource "aws_iam_role_policy_attachment" "state_policy_attachment" {
+
+resource "aws_iam_role_policy_attachment" "state_write_policy_attachment" {
   role       = aws_iam_role.oidc_example_state.name
   policy_arn = aws_iam_policy.state_policy.arn
 }
+
+resource "aws_iam_role_policy_attachment" "state_iamview_policy_attachment" {
+  role       = aws_iam_role.oidc_example_state.name
+  policy_arn = "arn:aws:iam::aws:policy/IAMReadOnlyAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "state_view_policy_attachment" {
+  role       = aws_iam_role.oidc_example_state.name
+  policy_arn = "arn:aws:iam::aws:policy/job-function/ViewOnlyAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "state_admin_policy_attachment" {
+  role       = aws_iam_role.oidc_example_state.name
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
+
 
 output "readonly_role_arn" {
   value = aws_iam_role.oidc_example_readonly.arn
@@ -117,4 +135,8 @@ output "readonly_role_arn" {
 
 output "write_role_arn" {
   value = aws_iam_role.oidc_example_write.arn
+}
+
+output "state_role_arn" {
+  value = aws_iam_role.oidc_example_state.arn
 }
