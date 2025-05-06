@@ -307,7 +307,6 @@ data "aws_iam_policy_document" "keypolicy" {
         data.aws_organizations_organization.organization.id
       ]
     }
-
   }
 
   statement {
@@ -333,13 +332,14 @@ data "aws_iam_policy_document" "keypolicy" {
         "s3.${data.aws_region.current.id}.amazonaws.com"
       ]
     }
-    # condition {
-    #   test     = "StringEquals"
-    #   variable = "kms:EncryptionContext:aws:s3:arn"
-    #   values = [
-    #     aws_s3_bucket.bucket.arn
-    #   ]
-    # }
+    condition {
+      test     = "StringLike"
+      variable = "kms:EncryptionContext:aws:s3:arn"
+      values = [
+        aws_s3_bucket.bucket.arn,
+        "${aws_s3_bucket.bucket.arn}/*"
+      ]
+    }
     condition {
       test     = "StringEquals"
       variable = "aws:PrincipalOrgID"
