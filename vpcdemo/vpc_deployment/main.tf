@@ -3,7 +3,8 @@ provider "aws" {
 }
 
 terraform {
-  backend "local" {}
+  backend "s3" {
+  }
 }
 
 module "vpc" {
