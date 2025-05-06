@@ -123,12 +123,6 @@ resource "aws_iam_role_policy_attachment" "state_view_policy_attachment" {
   policy_arn = "arn:aws:iam::aws:policy/job-function/ViewOnlyAccess"
 }
 
-resource "aws_iam_role_policy_attachment" "state_admin_policy_attachment" {
-  role       = aws_iam_role.oidc_example_state.name
-  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
-}
-
-
 output "readonly_role_arn" {
   value = aws_iam_role.oidc_example_readonly.arn
 }

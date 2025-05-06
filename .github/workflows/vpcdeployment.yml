@@ -1,0 +1,141 @@
+name: 'vpcdeployment'
+
+on:
+  workflow_dispatch:
+ 
+env:
+  ACCOUNT_ID: "398930073421"
+  ADDITIONAL_REGIONS: ""
+  NAME_IDENTIFIER: "vpc_demo_deployment"
+  OIDC_READONLY_ROLE_NAME: "oidc-example-readonly"
+  OIDC_WRITE_ROLE_NAME: "oidc-example-write"
+  region: "us-east-2"
+  WORKING_DIRECTORY: ./vpcdemo/vpc_deployment
+
+jobs:
+  plan:
+    name: 'plan'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: latest
+
+      - name: Authenticate with AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{env.ACCOUNT_ID}}:role/${{env.OIDC_READONLY_ROLE_NAME}}
+          aws-region: ${{env.region}}
+          mask-aws-account-id: false
+
+      - name: Terraform init
+        working-directory: ${{env.WORKING_DIRECTORY}}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{env.NAME_IDENTIFIER}}-tfstate-${{env.ACCOUNT_ID}}-${{env.region}}" \
+            -backend-config="use_lockfile=true" \
+            -backend-config="kms_key_id=arn:aws:kms:${{env.region}}:${{env.ACCOUNT_ID}}:alias/${{env.NAME_IDENTIFIER}}-tfstate" \
+            -backend-config="key=${{env.ACCOUNT_ID}}/${{env.region}}/vpc_demo_deployment" \
+            -backend-config="region=${{env.region}}" \
+            -backend-config="encrypt=true" \
+            -backend-config="max_retries=20"
+
+      - name: Terraform plan
+        working-directory: ${{env.WORKING_DIRECTORY}}
+        run: terraform plan -out=tfplan
+        env:
+          TF_VAR_management_account_id: ${{env.ACCOUNT_ID}}
+          TF_VAR_account_id: ${{env.ACCOUNT_ID}}
+          TF_VAR_region: ${{env.region}}
+          TF_VAR_ref: ${{github.ref_name}}
+          TF_VAR_ORGANIZATION_IDENTIFIER: ${{env.NAME_IDENTIFIER}}
+          
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v3
+        with:
+          name: tfplan
+          path: ${{env.WORKING_DIRECTORY}}/tfplan
+          retention-days: 1
+
+  apply:
+    name: 'apply'
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: example-dev
+    if: github.ref == 'refs/heads/main'
+    
+    defaults:
+      run:
+        shell: bash
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: latest
+
+      - name: Authenticate with AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{env.ACCOUNT_ID}}:role/${{env.OIDC_WRITE_ROLE_NAME}}
+          aws-region: ${{env.region}}
+          mask-aws-account-id: false
+          
+      - name: Terraform init
+        working-directory: ${{env.WORKING_DIRECTORY}}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{env.NAME_IDENTIFIER}}-tfstate-${{env.ACCOUNT_ID}}-${{env.region}}" \
+            -backend-config="use_lockfile=true" \
+            -backend-config="kms_key_id=arn:aws:kms:${{env.region}}:${{env.ACCOUNT_ID}}:alias/${{env.NAME_IDENTIFIER}}-tfstate" \
+            -backend-config="key=${{env.ACCOUNT_ID}}/${{env.region}}/vpc_demo_deployment" \
+            -backend-config="region=${{env.region}}" \
+            -backend-config="encrypt=true" \
+            -backend-config="max_retries=20"
+
+      - name: Download Terraform Plan
+        uses: actions/download-artifact@v3
+        with:
+          name: tfplan
+          path: ${{env.WORKING_DIRECTORY}}
+
+      - name: Terraform apply
+        working-directory: ${{env.WORKING_DIRECTORY}}
+        run: terraform apply tfplan
+        env:
+          TF_VAR_management_account_id: ${{env.ACCOUNT_ID}}
+          TF_VAR_account_id: ${{env.ACCOUNT_ID}}
+          TF_VAR_region: ${{env.region}}
+          TF_VAR_ref: ${{github.ref_name}}
+          TF_VAR_ORGANIZATION_IDENTIFIER: ${{env.NAME_IDENTIFIER}}
+
+      # - name: Terraform destroy
+      #   working-directory: ${{env.WORKING_DIRECTORY}}
+      #   if: github.ref == 'refs/heads/main'
+      #   run: terraform destroy --auto-approve
+      #   env:
+      #     TF_VAR_management_account_id: ${{env.ACCOUNT_ID}}
+      #     TF_VAR_account_id: ${{env.ACCOUNT_ID}}
+      #     TF_VAR_region: ${{env.region}}
+      #     TF_VAR_ref: ${{github.ref_name}}
+      #     TF_VAR_ORGANIZATION_IDENTIFIER: ${{env.NAME_IDENTIFIER}}

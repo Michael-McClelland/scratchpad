@@ -2,14 +2,6 @@ provider "aws" {
   region = "us-east-2"
 }
 
-# Example Transit Gateway resource (uncomment if you need to create a new Transit Gateway)
-# resource "aws_ec2_transit_gateway" "example" {
-#   description = "Example Transit Gateway"
-#   tags = {
-#     Name = "example-tgw"
-#   }
-# }
-
 module "vpc" {
   source = "./module"
 
@@ -82,10 +74,9 @@ module "vpc" {
       }
     }
   }
-  
-  # Transit Gateway attachment configuration
+
   create_transit_gateway_attachment = true
-  transit_gateway_id                = "tgw-040c1d9a2d68d1114" # Replace with your actual Transit Gateway ID
+  transit_gateway_id                = "tgw-040c1d9a2d68d1114"
   transit_gateway_attachment_name   = "example-vpc-tgw-attachment"
 }
 

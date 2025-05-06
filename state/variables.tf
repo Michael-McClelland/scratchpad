@@ -1,3 +1,4 @@
 variable "name" {
-  default = "goldrock"
+  description = "Name of the resource"
+  type        = string
 }
