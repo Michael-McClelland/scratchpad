@@ -2,6 +2,10 @@ provider "aws" {
   region = "us-east-2"
 }
 
+terraform {
+  backend "local" {}
+}
+
 module "vpc" {
   source = "./module"
 
