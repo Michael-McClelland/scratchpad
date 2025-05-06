@@ -68,7 +68,6 @@ jobs:
         with:
           name: tfplan
           path: ${{env.WORKING_DIRECTORY}}/tfplan
-          retention-days: 1
 
   apply:
     name: 'apply'
