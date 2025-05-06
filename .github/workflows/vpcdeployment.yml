@@ -64,7 +64,7 @@ jobs:
           TF_VAR_ORGANIZATION_IDENTIFIER: ${{env.NAME_IDENTIFIER}}
           
       - name: Upload Terraform Plan
-        uses: actions/upload-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: tfplan
           path: ${{env.WORKING_DIRECTORY}}/tfplan
