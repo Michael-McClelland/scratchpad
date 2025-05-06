@@ -6,7 +6,7 @@ on:
 env:
   ACCOUNT_ID: "398930073421"
   ADDITIONAL_REGIONS: ""
-  NAME_IDENTIFIER: "vpc_demo_deployment"
+  NAME_IDENTIFIER: "vpcdemo"
   OIDC_READONLY_ROLE_NAME: "oidc-example-readonly"
   OIDC_WRITE_ROLE_NAME: "oidc-example-write"
   region: "us-east-2"
